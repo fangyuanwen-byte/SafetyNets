@@ -1,19 +1,15 @@
 package com.example.SafetyNets.service;
 
-import com.example.SafetyNets.DTO.ChildrenAlertDto;
-import com.example.SafetyNets.DTO.PersonDto;
-import com.example.SafetyNets.DTO.PersonInfoDto;
+import com.example.SafetyNets.DTO.*;
 import com.example.SafetyNets.model.*;
 import com.example.SafetyNets.repository.DataRepository;
+import io.micrometer.observation.ObservationFilter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.boot.admin.SpringApplicationAdminMXBeanRegistrar;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.LocaleResolver;
 
-import java.awt.image.ImageProducer;
-import java.time.LocalDate;
-import java.time.Period;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
@@ -28,12 +24,14 @@ public class AlertService {
     //Explication: SpringApplicationAdminMXBeanRegistrar ?
 //    private final SpringApplicationAdminMXBeanRegistrar springApplicationAdminMXBeanRegistrar;
     private final DateTimeFormatter formatter = DateTimeFormatter.ofPattern("MM/dd/yyyy");
+    private final FirestationService firestationService;
 //    private final LocaleResolver localeResolver;
 
-    public AlertService(DataRepository repo, SpringApplicationAdminMXBeanRegistrar springApplicationAdminMXBeanRegistrar, LocaleResolver localeResolver) {
+    public AlertService(DataRepository repo, SpringApplicationAdminMXBeanRegistrar springApplicationAdminMXBeanRegistrar, LocaleResolver localeResolver, FirestationService firestationService) {
         this.repo = repo;
 //        this.springApplicationAdminMXBeanRegistrar = springApplicationAdminMXBeanRegistrar;
 //        this.localeResolver = localeResolver;
+        this.firestationService = firestationService;
     }
 
 
@@ -409,13 +407,14 @@ public class AlertService {
         return result;
     }
 
-//TODO: for No.(2) URL: /childAlert?address=<address> :method to getAllChildren by searching address :getFirstName(); getLastName(); getAge();getFamilyMembers(); return Null(if no child found)
+//Done: for No.(2) URL: /childAlert?address=<address> :method to getAllChildren by searching address :getFirstName(); getLastName(); getAge();getFamilyMembers(); return Null(if no child found)
     ////V1 : return value as Map<String,Object>
-public Map<String, Object> childrenAlerts(String address) {
+//public Map<String, Object> childrenAlerts(String address) {
+public List<ChildrenAlertDto> childrenAlerts(String address) {
         List<Person>  personList= repo.getPersons();
         List<MedicalRecord> medicalRecordList = repo.getMedicalRecords();
 
-        Map<String,Object> result = new HashMap<>();
+    List<ChildrenAlertDto> result = new ArrayList<>();
 
         //way1: with stream() and Dto ---TODO: i have cut this to several stream() and converted many times the type of object for List, Error can generated when the logic is too long! Waiting to find a way to simplify my stream---------it can be replaced with for loop and if...else virifying conditions as well!
             //step1: get List<Person> getPersonsByAddress
@@ -443,7 +442,8 @@ public Map<String, Object> childrenAlerts(String address) {
                 .map(MedicalRecord::getLastName)
                 .toList();
 
-         //TODO: the return value of this list is not correct, for example, for address"1509 Culver St" should have two children but everyone has five familyMembers, my return has only two same , not correct!
+        /*
+         //Done: the return value of this list is not correct, for example, for address"1509 Culver St" should have two children but everyone has five familyMembers, my return has only two same , not correct!
         //get familyMembers as List<MedicalRecord>
         List<MedicalRecord> familyMembersFromMedicalRecord = medicalRecordList.stream()
                 .filter(medicalRecord -> getChildrenListByAddressLastNames.contains(medicalRecord.getLastName()))
@@ -456,6 +456,8 @@ public Map<String, Object> childrenAlerts(String address) {
                         )
                 .toList();
 
+         */
+
 //        List<ChildrenAlertDto> getChildrenByAddressDto = medicalRecordList.stream()
 //                .filter(medicalRecord -> getPersonsByAddress.stream()
 //                        .anyMatch(person -> Objects.equals(person.getFirstName(), medicalRecord.getFirstName())&& Objects.equals(person.getLastName(), medicalRecord.getLastName())&& !CountAge.IsAdult(medicalRecord)))
@@ -464,7 +466,17 @@ public Map<String, Object> childrenAlerts(String address) {
 //                                ))
 //                .toList();
 
+    for (MedicalRecord childMR : getChildrenListByAddress)
+    {
+        List<Person> familyMembers = getPersonsByAddress.stream()
+                .filter(person -> Objects.equals(person.getLastName(), childMR.getLastName()) && !Objects.equals(person.getFirstName(), childMR.getFirstName()))
+                .toList();
 
+        ChildrenAlertDto childrenAlertDto = new ChildrenAlertDto(childMR.getFirstName(), childMR.getLastName(), String.valueOf(CountAge.CalculateAge(childMR)), familyMembers);
+        result.add(childrenAlertDto);
+    }
+
+    /*
     List<ChildrenAlertDto> getChildrenByAddressDto = getChildrenListByAddress.stream()
             .map(medicalRecord->new ChildrenAlertDto(
                     medicalRecord.getFirstName(),medicalRecord.getLastName(), String.valueOf(CountAge.CalculateAge(medicalRecord)), familyMembers
@@ -472,7 +484,7 @@ public Map<String, Object> childrenAlerts(String address) {
             .toList();
 
        result.put("ChildrenAtThisAddress", getChildrenByAddressDto);
-
+*/
        //for no children return null, else return the List<ChildrenAlertDto>
        if(getChildrenListByAddress.isEmpty()){
            return null;
@@ -557,20 +569,142 @@ public Map<String, Object> childrenAlerts(String address) {
 
 
 
-//TODO: for No.(4)URL /fire?address=<address>: method to :(i) get List<Person> by searching address ; person.firestName(); person.lastName; (ii) method to get List<MedicalRecords> ;then the method of person.getAge(String birthdate); then method of List<String> of medications; then method of List<String> of allergies;
+//Done: for No.(4)URL /fire?address=<address>: method to :(i) get List<Person> by searching address ; person.firestName(); person.lastName; (ii) method to get List<MedicalRecords> ;then the method of person.getAge(String birthdate); then method of List<String> of medications; then method of List<String> of allergies;
+    public FireResponseDto getFireInfo(String address) {
+        //step1: filter the persons has the same address
+            List<Person> getPersonsByAddress = repo.getPersons().stream()
+                .filter(person -> person.getAddress().equals(address))
+                .toList();
 
-//TODO: for No.(5) URL: /flood/stations?stations=<list>: (i) getAllFirestations() as a List<Firestation>; (ii) optional exo for me: List<Person> then create List<Family> by stream().filter( person.lastName);(iii) then with stream().filter(address) to .collect() person.firstName(); person.lastName(); (IV) method to get List<MedicalRecords> (V) method of getAge(medicalRecord.birthdate()); (VI) method of returning List<String> Medications ; method of returning List<String> Allergies;
+            String stationNumber = findStationByAddress(address)
+                    .map(Firestation::getStation)
+                    .orElse(null);
 
-//TODO: for No.(6) URL:  /personInfo?firstName=&lastName= (i) get List<Person> by searching firstName, lastName (ii) returning person.address; person.email; person.firstName; person.lastName;(iii)get List<MedicalRecord>, then method to getAge(medicalRecord.birthdate());method of returning two List<String> Medications + List<String> Allergies; or create a new List of this two List if it is possible as List<MedicationAllergies> ;(iv) use stream().filter and .collect()
+            List<FirePersonInfoDto> infoDtos = new ArrayList<>();
+
+            for(Person pWanted : getPersonsByAddress){
+                Optional<MedicalRecord> optional = findMedicalRecord(pWanted.getFirstName(),pWanted.getLastName());
+                int age =optional.map(CountAge::CalculateAge).orElse(0);
+                List<String> medications = optional.map(MedicalRecord::getMedications).orElse(List.of());
+                List<String> allergies = optional.map(MedicalRecord::getAllergies).orElse(List.of());
+
+                infoDtos.add(new FirePersonInfoDto(
+                        pWanted.getFirstName(),
+                        pWanted.getLastName(),
+                        pWanted.getPhone(),
+                        age,
+                        medications,
+                        allergies
+                ));
+            }
+            return new FireResponseDto(stationNumber,infoDtos);
+        }
+
+
+
+    //Done: for No.(5) URL: /flood/stations?stations=<list>: (i) getAllFirestations() as a List<Firestation>; (ii) optional exo for me: List<Person> then create List<Family> by stream().filter( person.lastName);(iii) then with stream().filter(address) to .collect() person.firstName(); person.lastName(); (IV) method to get List<MedicalRecords> (V) method of getAge(medicalRecord.birthdate()); (VI) method of returning List<String> Medications ; method of returning List<String> Allergies;
+    public FloodResponseDto getFloodInfo(List<String> stationList) {
+        List<String>  getAddressByStations = repo.getFirestations().stream()
+                .filter(firestation -> stationList.contains(firestation.getStation()))
+                .map(Firestation::getAddress)
+                .toList();
+
+        Map<String, List<Person>> mapByAddress = repo.getPersons().stream()
+                .filter(person -> getAddressByStations.contains(person.getAddress()))
+                .collect(Collectors.groupingBy(Person::getAddress));
+
+        List<FloodAddressInfoDto> houseHolds = new ArrayList<>();
+
+        //TODO: for loop for Map<> with stream()
+        for(Map.Entry<String, List<Person>> entry : mapByAddress.entrySet()){
+            String address = entry.getKey();
+            List<Person> persons = entry.getValue();
+
+            List<FloodPersonInfoDto> infos = new ArrayList<>();
+
+            for(Person pWanted : persons){
+                Optional<MedicalRecord> optional = findMedicalRecord(pWanted.getFirstName(),pWanted.getLastName());
+
+                int age = optional.map(CountAge::CalculateAge).orElse(0);
+                List<String> medications = optional.map(MedicalRecord::getMedications).orElse(List.of());
+                List<String> allergies = optional.map(MedicalRecord::getAllergies).orElse(List.of());
+
+                infos.add(new FloodPersonInfoDto(
+                        pWanted.getFirstName(),
+                        medications,
+                        allergies,
+                        age,
+                        pWanted.getPhone(),
+                       pWanted.getLastName()
+                ));
+
+            }
+            houseHolds.add(new FloodAddressInfoDto(address,infos));
+        }
+        return new FloodResponseDto((houseHolds));
+        }
+
+
+//Done: for No.(6) URL:  /personInfo?firstName=&lastName= (i) get List<Person> by searching firstName, lastName (ii) returning person.address; person.email; person.firstName; person.lastName;(iii)get List<MedicalRecord>, then method to getAge(medicalRecord.birthdate());method of returning two List<String> Medications + List<String> Allergies; or create a new List of this two List if it is possible as List<MedicationAllergies> ;(iv) use stream().filter and .collect()
     //// V1 : with return value of Map<String,Object>
     //way1:stream() with Dto
-    public Map<String, Object> getPersonInfo(String firstName, String lastName) {
-
+//    public Map<String, Object> getPersonInfo(String firstName, String lastName) {
+        public List<PersonInfoDto> getPersonInfo(String firstName, String lastName) {
         List<Person> personList= repo.getPersons();
         List<MedicalRecord> medicalRecordList = repo.getMedicalRecords();
 
-        Map<String,Object> result = new HashMap<>();
+//        Map<String,Object> result = new HashMap<>();
+            List<PersonInfoDto> result = new ArrayList<>();
 
+            //step1: filter for the list of people who has the same firstName and lastName----ro narrow down the searching scope
+            List<Person> getPersonsByNames = personList.stream()
+                    .filter(person -> person.getFirstName().equals(firstName)&& person.getLastName().equals(lastName))
+                    .toList();
+
+            //put all the selection into the for loop within the scope which has been narrowed down
+            for(Person pWanted : getPersonsByNames){
+                //good way
+                Optional<MedicalRecord> optional = findMedicalRecord(pWanted.getFirstName(),pWanted.getLastName());
+
+                int age = optional.map(CountAge::CalculateAge).orElse(0);
+                List<String> medicationsByNames = optional.map(MedicalRecord::getMedications).orElse(List.of());
+                List<String> allergiesByNames = optional.map(MedicalRecord::getAllergies).orElse(List.of());
+
+                /* myway: need to debuger
+                //TODO: the type of medicationByNames is not as wanted with .toString or .toList, but by using Collections.singletoList(), can turn the String with several elements to a List.
+
+                String medicationsByNames = medicalRecordList.stream()
+                        .filter(medicalRecord -> medicalRecord.getFirstName().equals(pWanted.getFirstName()) && medicalRecord.getLastName().equals(pWanted.getLastName()))
+                        .map(MedicalRecord::getMedications)
+                        .toString();
+
+
+                String allergiesByNames = medicalRecordList.stream()
+                        .filter(medicalRecord -> medicalRecord.getFirstName().equals(pWanted.getFirstName()) && medicalRecord.getLastName().equals(pWanted.getLastName()))
+                        .map(MedicalRecord::getAllergies)
+                        .toString();
+
+
+                //TODO: debuger the age
+                String age = medicalRecordList.stream()
+                        .filter(medicalRecord -> medicalRecord.getFirstName().equals(pWanted.getFirstName()) && medicalRecord.getLastName().equals(pWanted.getLastName()))
+                                .map(CountAge::CalculateAge)
+                                        .toString();
+
+                 */
+
+                result.add(new PersonInfoDto(
+                        pWanted.getFirstName(),
+                        pWanted.getLastName(),
+                        pWanted.getAddress(),
+                        age,
+                        pWanted.getEmail(),
+                        medicationsByNames,
+                        allergiesByNames));
+
+            }
+
+        /* should be put in for loop , or else, the list won't be connected with the condition of selection!
         List<String> medicationsByNames = medicalRecordList.stream()
                 .filter(person -> personList.stream()
                         .anyMatch(medicalRecord ->  Objects.equals(medicalRecord.getFirstName(),person.getFirstName() )&& Objects.equals(medicalRecord.getLastName(),person.getLastName())))
@@ -585,7 +719,8 @@ public Map<String, Object> childrenAlerts(String address) {
 
         //TODO: to check the return of age
         int ageByNames = medicalRecordList.stream()
-                .map(CountAge::CalculateAge);
+                .map(CountAge::CalculateAge)
+                .collect();
 
 
         List<PersonInfoDto> personInfoDtos = personList.stream()
@@ -594,9 +729,12 @@ public Map<String, Object> childrenAlerts(String address) {
 //                        .anyMatch(medicalRecord ->  Objects.equals(medicalRecord.getFirstName(),person.getFirstName() )&& Objects.equals(medicalRecord.getLastName(),person.getLastName())))
 
                 .map(person -> new PersonInfoDto(
+                //to put the filtered list of into the constructor, it won't be irritated, so wrong!
                         person.getFirstName(),person.getLastName(),person.getAddress(),ageByNames,person.getEmail(),medicationsByNames,allergiesByNames)
                 )
                 .toList();
+
+         */
 
 
         return  result;
@@ -655,6 +793,21 @@ public Map<String, Object> childrenAlerts(String address) {
         return Period.between( LocalDate.parse(mr.getBirthdate(),formatter), LocalDate.now()).getYears() > 18;
     }
 
+
+
      */
+    //method as util will be used in Service layer
+    Optional<MedicalRecord> findMedicalRecord(String firstName, String lastName){
+        return repo.getMedicalRecords().stream()
+                .filter(medicalRecord -> medicalRecord.getFirstName().equals(firstName) && medicalRecord.getLastName().equals(lastName))
+                .findFirst();
+    }
+
+    Optional<Firestation> findStationByAddress(String address) {
+        return repo.getFirestations().stream()
+                .filter(firestation -> firestation.getAddress().equals(address))
+                .findFirst();
+    }
+
 }
 

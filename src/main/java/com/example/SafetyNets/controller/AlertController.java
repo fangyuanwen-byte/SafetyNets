@@ -1,10 +1,14 @@
 package com.example.SafetyNets.controller;
 
-import com.example.SafetyNets.model.Person;
+import com.example.SafetyNets.DTO.ChildrenAlertDto;
+import com.example.SafetyNets.DTO.FireResponseDto;
+import com.example.SafetyNets.DTO.FloodResponseDto;
+import com.example.SafetyNets.DTO.PersonInfoDto;
+import com.example.SafetyNets.model.Firestation;
 import com.example.SafetyNets.service.AlertService;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.HashMap;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 
@@ -35,14 +39,14 @@ public class AlertController {
     }
 
 
-//TODO: for No.(2) URL: /childAlert?address=<address> :method to getAllChildren by searching address :getFirstName(); getLastName(); getAge();getFamilyMembers(); return Null(if no child found)
+//Done: for No.(2) URL: /childAlert?address=<address> :method to getAllChildren by searching address :getFirstName(); getLastName(); getAge();getFamilyMembers(); return Null(if no child found)
     @GetMapping("/childAlert")
     //V1 : return value as Map<String,Object>
-    public Map<String,Object> childrenAlerts(String address){
+    public List<ChildrenAlertDto> childrenAlerts(String address){
         return service.childrenAlerts(address);
     }
 
-//TODO: for No.(3) URL : /phoneAlert?firestation=<number>
+//Done: for No.(3) URL : /phoneAlert?firestation=<number>
 //for No.(3): method to getAllPhones(): for No.(3)URL: /phoneAlert?firestation=<number>
     @GetMapping("/phoneAlert")
     //V1: for way1 and way2 : return value of List<String>
@@ -59,16 +63,23 @@ public class AlertController {
     }
 //
 
-//TODO: for No.(4)URL /fire?address=<address>: method to :(i) get List<Person> by searching address ; person.firestName(); person.lastName; (ii) method to get List<MedicalRecords> ;then the method of person.getAge(String birthdate); then method of List<String> of medications; then method of List<String> of allergies;
+    @GetMapping("/fire")
+//Done: for No.(4)URL /fire?address=<address>: method to :(i) get List<Person> by searching address ; person.firestName(); person.lastName; (ii) method to get List<MedicalRecords> ;then the method of person.getAge(String birthdate); then method of List<String> of medications; then method of List<String> of allergies;
+    public FireResponseDto getFire(@RequestParam String address) {
+        return service.getFireInfo(address);
+    }
 
+    @GetMapping("/flood/stations")
+//Done: for No.(5) URL: /flood/stations?stations=<list>: (i) getAllFirestations() as a List<Firestation>; (ii) optional exo for me: List<Person> then create List<Family> by stream().filter( person.lastName);(iii) then with stream().filter(address) to .collect() person.firstName(); person.lastName(); (IV) method to get List<MedicalRecords> (V) method of getAge(medicalRecord.birthdate()); (VI) method of returning List<String> Medications ; method of returning List<String> Allergies;
+    public FloodResponseDto getFlood(@RequestParam String stations){
+        List<String> stationList = Arrays.asList(stations.split(","));
+        return service.getFloodInfo(stationList);
+    }
 
-//TODO: for No.(5) URL: /flood/stations?stations=<list>: (i) getAllFirestations() as a List<Firestation>; (ii) optional exo for me: List<Person> then create List<Family> by stream().filter( person.lastName);(iii) then with stream().filter(address) to .collect() person.firstName(); person.lastName(); (IV) method to get List<MedicalRecords> (V) method of getAge(medicalRecord.birthdate()); (VI) method of returning List<String> Medications ; method of returning List<String> Allergies;
-
-
-//TODO: for No.(6) URL:  /personInfo?firstName=&lastName= (i) get List<Person> by searching firstName, lastName (ii) returning person.address; person.email; person.firstName; person.lastName;(iii)get List<MedicalRecord>, then method to getAge(medicalRecord.birthdate());method of returning two List<String> Medications + List<String> Allergies; or create a new List of this two List if it is possible as List<MedicationAllergies> ;(iv) use stream().filter and .collect()------(1)return List<String> without TDO;(2) another return List<PersonInfo> as multiple dimensional table with TDO
+//Done: for No.(6) URL:  /personInfo?firstName=&lastName= (i) get List<Person> by searching firstName, lastName (ii) returning person.address; person.email; person.firstName; person.lastName;(iii)get List<MedicalRecord>, then method to getAge(medicalRecord.birthdate());method of returning two List<String> Medications + List<String> Allergies; or create a new List of this two List if it is possible as List<MedicationAllergies> ;(iv) use stream().filter and .collect()------(1)return List<String> without TDO;(2) another return List<PersonInfo> as multiple dimensional table with TDO
     @GetMapping("/personInfo")
     //V1: with return value of Map<String,Object>
-    public Map<String,Object> getPersonInfo(@RequestParam String firstName,@RequestParam String lastName){
+    public List<PersonInfoDto> getPersonInfo(@RequestParam String firstName, @RequestParam String lastName){
         return service.getPersonInfo(firstName,lastName);
 
     }
